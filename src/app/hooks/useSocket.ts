@@ -2,8 +2,9 @@
 
 import { useEffect, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
+import { Op } from '../../crdt/rga';
 
-export function useSocket(onOp: (op: any) => void) {
+export function useSocket(onOp: (op: Op) => void) {
   const socketRef = useRef<Socket>();
 
   useEffect(() => {
@@ -21,7 +22,7 @@ export function useSocket(onOp: (op: any) => void) {
       console.log('Socket disconnected');
     });
 
-    socket.on('crdt-op', (op) => {
+    socket.on('crdt-op', (op: Op) => {
       onOp(op);
     });
 
@@ -31,7 +32,7 @@ export function useSocket(onOp: (op: any) => void) {
   }, [onOp]);
 
   // 로컬에서 생성한 op을 서버에 전송
-  const emitOp = (op: any) => {
+  const emitOp = (op: Op) => {
     if (socketRef.current?.connected) {
       socketRef.current.emit('crdt-op', op);
     }
