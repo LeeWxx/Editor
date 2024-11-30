@@ -1,36 +1,73 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useSocket } from '../hooks/useSocket';
+import { RGA, Op } from '../../crdt/rga';
 
 export default function CollaborativeEditor() {
   const [text, setText] = useState('');
   const [operations, setOperations] = useState<string[]>([]);
+  const rgaRef = useRef<RGA>(new RGA());
+  
+  // 텍스트 상태 업데이트 함수
+  const updateText = useCallback(() => {
+    setText(rgaRef.current.getText());
+  }, []);
 
   // 원격 작업을 처리하는 콜백
-  const handleRemoteOperation = useCallback((op: any) => {
+  const handleRemoteOperation = useCallback((op: Op) => {
     console.log('원격 작업 수신:', op);
-    setOperations(prev => [...prev, `수신: ${op.type} - ${op.data || '데이터 없음'}`]);
     
-    if (op.type === 'add-text') {
-      setText(prev => prev + op.data);
+    // 작업 로그에 추가
+    if (op.type === 'insert') {
+      setOperations(prev => [...prev, `수신: ${op.type} - 텍스트: "${op.value}" 부모ID: ${op.parentId.slice(0, 4)}`]);
+    } else {
+      setOperations(prev => [...prev, `수신: ${op.type} - ID: ${op.id.slice(0, 4)}`]);
     }
-  }, []);
+    
+    // RGA에 작업 적용
+    rgaRef.current.apply(op);
+    updateText();
+  }, [updateText]);
 
   // 소켓 훅 사용
   const emitOperation = useSocket(handleRemoteOperation);
 
-  // 로컬 작업 전송
-  const handleSendOperation = () => {
+  // 텍스트 삽입
+  const handleInsert = () => {
     const newText = prompt('추가할 텍스트를 입력하세요:');
-    if (newText) {
-      const op = { type: 'add-text', data: newText };
-      emitOperation(op);
-      setOperations(prev => [...prev, `송신: ${op.type} - ${op.data}`]);
-      setText(prev => prev + newText);
-    }
+    if (!newText) return;
+    
+    // 마지막 위치에 삽입 (HEAD만 있으면 0, 아니면 마지막 요소 인덱스)
+    const position = rgaRef.current.visibleElements().length - 1;
+    
+    // 텍스트 전체를 하나의 작업으로 처리
+    const op = rgaRef.current.localInsert(position, newText);
+    
+    // 작업 로그에 추가
+    setOperations(prev => [...prev, `송신: ${op.type} - 텍스트: "${op.value}" 부모ID: ${op.parentId.slice(0, 4)}`]);
+    
+    // 다른 클라이언트에 작업 전파
+    emitOperation(op);
+    updateText();
   };
 
+  // 텍스트 삭제
+  const handleDelete = () => {
+    const visibleElements = rgaRef.current.visibleElements();
+    if (visibleElements.length <= 1) return; // HEAD만 있으면 삭제 X
+    
+    // 마지막 문자 삭제
+    const op = rgaRef.current.localDelete(visibleElements.length - 1);
+    
+    // 작업 로그에 추가
+    setOperations(prev => [...prev, `송신: ${op.type} - ID: ${op.id.slice(0, 4)}`]);
+    
+    // 다른 클라이언트에 작업 전파
+    emitOperation(op);
+    updateText();
+  };
+  
   return (
     <div className="p-4 w-full max-w-6xl mx-auto">
       
@@ -38,12 +75,20 @@ export default function CollaborativeEditor() {
         {text}
       </div>
       
-      <button
-        onClick={handleSendOperation}
-        className="w-full px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-      >
-        텍스트 추가
-      </button>
+      <div className="flex gap-2 mb-4">
+        <button
+          onClick={handleInsert}
+          className="flex-1 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+        >
+          문자열 추가
+        </button>
+        <button
+          onClick={handleDelete}
+          className="flex-1 px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+        >
+          마지막 문자열 삭제
+        </button>
+      </div>
       
       <div className="mt-6">
         <h2 className="text-xl font-semibold mb-2">작업 로그</h2>
