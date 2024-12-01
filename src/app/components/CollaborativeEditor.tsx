@@ -20,9 +20,9 @@ export default function CollaborativeEditor() {
     
     // 작업 로그에 추가
     if (op.type === 'insert') {
-      setOperations(prev => [...prev, `수신: ${op.type} - 텍스트: "${op.value}" 부모ID: ${op.parentId.slice(0, 4)}`]);
+      setOperations(prev => [...prev, `수신: ${op.type} - 텍스트: "${op.value}" 부모ID: ${op.parentId ? op.parentId.slice(0, 4) : 'undefined'}`]);
     } else {
-      setOperations(prev => [...prev, `수신: ${op.type} - ID: ${op.id.slice(0, 4)}`]);
+      setOperations(prev => [...prev, `수신: ${op.type} - ID: ${op.id ? op.id.slice(0, 4) : 'undefined'}`]);
     }
     
     // RGA에 작업 적용
@@ -42,13 +42,16 @@ export default function CollaborativeEditor() {
     const position = rgaRef.current.visibleElements().length - 1;
     
     // 텍스트 전체를 하나의 작업으로 처리
-    const op = rgaRef.current.localInsert(position, newText);
+    const ops = rgaRef.current.localInsert(position, newText);
     
     // 작업 로그에 추가
-    setOperations(prev => [...prev, `송신: ${op.type} - 텍스트: "${op.value}" 부모ID: ${op.parentId.slice(0, 4)}`]);
+    ops.forEach(op => {
+      setOperations(prev => [...prev, `송신: ${op.type} - 텍스트: "${op.value}" 부모ID: ${op.parentId ? op.parentId.slice(0, 4) : 'undefined'}`]);
+      
+      // 다른 클라이언트에 작업 전파
+      emitOperation(op);
+    });
     
-    // 다른 클라이언트에 작업 전파
-    emitOperation(op);
     updateText();
   };
 
@@ -60,11 +63,15 @@ export default function CollaborativeEditor() {
     // 마지막 문자 삭제
     const op = rgaRef.current.localDelete(visibleElements.length - 1);
     
-    // 작업 로그에 추가
-    setOperations(prev => [...prev, `송신: ${op.type} - ID: ${op.id.slice(0, 4)}`]);
+    // 작업이 성공적으로 수행되었는지 확인
+    if (op) {
+      // 작업 로그에 추가
+      setOperations(prev => [...prev, `송신: ${op.type} - ID: ${op.id ? op.id.slice(0, 4) : 'undefined'}`]);
+      
+      // 다른 클라이언트에 작업 전파
+      emitOperation(op);
+    }
     
-    // 다른 클라이언트에 작업 전파
-    emitOperation(op);
     updateText();
   };
   

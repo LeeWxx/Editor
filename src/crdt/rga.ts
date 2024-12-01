@@ -24,18 +24,56 @@ export class RGA {
     this.indexById.set(headId, 0);
   }
 
-  // 로컬 삽입: position 위치 다음에 value 삽입
-  localInsert(position: number, value: string): InsertOp {
-    const parent = this.sequence[position];
-    const id = uuidv4();
-    const op: InsertOp = { type: 'insert', id, value, parentId: parent.id };
-    this.apply(op);
-    return op;
+  // 로컬 삽입: position 위치 다음에 value 삽입 (각 문자를 개별 노드로 삽입)
+  localInsert(position: number, value: string): InsertOp[] {
+    const ops: InsertOp[] = [];
+    
+    // position이 유효한지 확인
+    if (position < 0 || position >= this.sequence.length) {
+      position = 0; // 기본값으로 HEAD 노드 사용
+    }
+    
+    let currentParent = this.sequence[position];
+    
+    // 문자열의 각 문자에 대해 개별 노드 생성
+    for (const char of value) {
+      // 항상 유효한 ID가 있는지 확인
+      if (!currentParent || !currentParent.id) {
+        currentParent = this.sequence[0]; // HEAD 노드로 fallback
+      }
+      
+      const id = uuidv4();
+      const op: InsertOp = { 
+        type: 'insert', 
+        id, 
+        value: char, 
+        parentId: currentParent.id 
+      };
+      
+      this.apply(op);
+      ops.push(op);
+      
+      // 다음 작업을 위해 새 요소를 찾음
+      const newIdx = this.indexById.get(id);
+      // 새 요소가 제대로 삽입되었는지 확인
+      if (newIdx !== undefined) {
+        currentParent = this.sequence[newIdx];
+      }
+    }
+    
+    return ops;
   }
 
   // 로컬 삭제: visible 요소 중 position 위치 요소 삭제
-  localDelete(position: number): DeleteOp {
-    const elem = this.visibleElements()[position];
+  localDelete(position: number): DeleteOp | null {
+    const visibleElems = this.visibleElements();
+    
+    // 유효한 position인지 확인
+    if (position < 0 || position >= visibleElems.length) {
+      return null;
+    }
+    
+    const elem = visibleElems[position];
     const op: DeleteOp = { type: 'delete', id: elem.id };
     this.apply(op);
     return op;
@@ -44,6 +82,11 @@ export class RGA {
   // 모든 노드에 적용 가능한 apply
   apply(op: Op) {
     if (op.type === 'insert') {
+      // parentId가 유효한지 확인
+      if (!op.parentId) {
+        return; // 유효하지 않은 parentId
+      }
+      
       const parentIdx = this.indexById.get(op.parentId);
       if (parentIdx === undefined) return;
       
@@ -87,6 +130,9 @@ export class RGA {
       this.sequence.splice(insertIdx, 0, newElem);
       this.rebuildIndex();
     } else {
+      // delete operation일 경우
+      if (!op.id) return; // 유효하지 않은 id
+      
       const idx = this.indexById.get(op.id);
       if (idx !== undefined) {
         this.sequence[idx].deleted = true;
