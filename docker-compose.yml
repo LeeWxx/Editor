@@ -1,0 +1,16 @@
+version: '3'
+
+services:
+  yorkie:
+    image: yorkieteam/yorkie:latest
+    ports:
+      - "8080:8080"
+    environment:
+      - YORKIE_PPROF=false
+      - YORKIE_METRICS=false
+    command: ["server"]
+    volumes:
+      - yorkie-data:/yorkie/data
+
+volumes:
+  yorkie-data: 
