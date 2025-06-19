@@ -1,6 +1,9 @@
 import * as yorkie from '@yorkie-js/sdk';
 import { YorkieClient, YorkieDocument, EditorDocumentType } from './types';
 
+// 원본 Yorkie 문서 객체를 저장하는 Map
+const originalDocuments = new Map<string, yorkie.Document<EditorDocumentType>>();
+
 // Yorkie 클라이언트를 YorkieClient 인터페이스로 변환하는 함수
 function toYorkieClient(client: yorkie.Client): YorkieClient {
   return {
@@ -15,7 +18,11 @@ function toYorkieClient(client: yorkie.Client): YorkieClient {
 
 // 문서를 YorkieDocument 인터페이스로 변환하는 함수
 function toYorkieDocument(doc: yorkie.Document<EditorDocumentType>): YorkieDocument {
+  const docId = `doc-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+  originalDocuments.set(docId, doc);
+  
   return {
+    id: docId,
     subscribe: (callback) => {
       doc.subscribe(callback);
     },
@@ -64,7 +71,18 @@ export async function detachDocument(
   doc: YorkieDocument
 ): Promise<void> {
   try {
-    // TODO: 문서 분리 기능 구현
+    if (!doc.id) {
+      throw new Error('문서 ID가 없습니다.');
+    }
+    
+    // 원본 문서 객체 찾기
+    const originalDoc = originalDocuments.get(doc.id);
+    if (originalDoc) {
+      await client.detach(originalDoc);
+      originalDocuments.delete(doc.id);
+    } else {
+      console.warn('원본 문서를 찾을 수 없습니다:', doc.id);
+    }
   } catch (err) {
     console.error('문서 분리 오류:', err);
   }

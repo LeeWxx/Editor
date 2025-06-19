@@ -18,6 +18,7 @@ export interface YorkieClient {
 
 // 문서 인터페이스
 export interface YorkieDocument {
+  id: string;
   subscribe(callback: (event: yorkie.DocEvent) => void): void;
   update(updater: (root: EditorDocumentType) => void): void;
   getRoot(): EditorDocumentType;
